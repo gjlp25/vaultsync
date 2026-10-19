@@ -1,4 +1,4 @@
-# Image for running vaultsync on a server (e.g. next to the Hermes containers).
+# Image for running vaultsync on a server (e.g. a Docker host that mounts your NAS).
 # Settings come from compose.yml; see compose.example.yml.
 
 # Small Node.js base image, plus git (vaultsync drives the git command-line tool).

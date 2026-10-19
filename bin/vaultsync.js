@@ -25,7 +25,7 @@ const { VAULT_PATH, GITHUB_TOKEN, DEBOUNCE_SECONDS = '30', PULL_INTERVAL_SECONDS
 const command = process.argv[2];
 
 // VAULT_PATH can hold several vaults, separated by ":" (";" on Windows, where ":" is part of
-// "C:\"). Example: VAULT_PATH=/vaults/Werk:/vaults/Prive
+// "C:\"). Example: VAULT_PATH=/vaults/Work:/vaults/Personal
 const vaultPaths = (VAULT_PATH ?? '').split(path.delimiter).filter(Boolean);
 
 const USAGE = `usage: vaultsync <command>

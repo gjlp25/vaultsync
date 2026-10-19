@@ -220,7 +220,7 @@ export async function pull(v) {
   // Only rebase when GitHub actually has commits we don't. Skipped before the first push (no
   // origin/main yet) and in an empty repo (no HEAD yet).
   if ((await hasRef(v, remote)) && (await hasRef(v, 'HEAD')) && (await count(v, `HEAD..${remote}`)) > 0) {
-    // --autostash: if a file changed after step 1 (e.g. Hermes is still writing), park that change,
+    // --autostash: if a file changed after step 1 (e.g. another app is still writing), park that change,
     // rebase, then put it back, instead of refusing to rebase.
     await v.git.raw(['rebase', '--autostash', remote]).catch((err) => {
       if (!rebaseInProgress(v)) throw err; // a real error, not a pause for conflicts

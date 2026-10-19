@@ -3,8 +3,9 @@
 # Copy to compose.yml and change the lines marked "CHANGE".
 # Put the token in a file called .env next to compose.yml:  GITHUB_TOKEN=github_pat_...
 #
-# Rule: this container is the only thing that runs git in these folders. Hermes may read and
-# write notes, but never run git there, and never start a second vaultsync on the same folders.
+# Rule: this container is the only thing that runs git in these folders. Other apps on the server
+# (for example an AI agent) may read and write
+# notes, but never run git there, and never start a second vaultsync on the same folders.
 
 services:
   vaultsync:
@@ -19,12 +20,11 @@ services:
     # CHANGE: the user that owns the vault files on the NAS, as "uid:gid".
     # On the Docker server, run `ls -ln /mnt/nas/obsidian`; the two numbers after the
     # permissions are the uid and gid. If these are wrong you'll see "Permission denied".
-    user: "1026:100"
+    user: "1000:1000"
 
     environment:
       # CHANGE: the vault folders *inside* the container (right-hand side of `volumes` below),
       # separated by ":".
-      VAULT_PATH: /vaults/Werk:/vaults/Prive:/vaults/Project:/vaults/Archief
 
       # Taken from the .env file next to compose.yml. Needs "Contents: Read and write" on all
       # vault repos.
@@ -41,10 +41,8 @@ services:
       # PULL_INTERVAL_SECONDS: 300   # sync at least this often
 
     # CHANGE: one line per vault, "<folder on the Docker server>:<folder in the container>".
-    # Left side: the same NFS paths the Hermes containers mount.
+    # Left side: where the vaults live on the Docker server (for example an NFS mount of the NAS).
     # Right side: must match VAULT_PATH above.
     volumes:
-      - /mnt/nas/obsidian/Werk:/vaults/Werk
-      - /mnt/nas/obsidian/Prive:/vaults/Prive
-      - /mnt/nas/obsidian/Project:/vaults/Project
-      - /mnt/nas/obsidian/Archief:/vaults/Archief
+      - /mnt/nas/obsidian/Work:/vaults/Work
+      - /mnt/nas/obsidian/Personal:/vaults/Personal

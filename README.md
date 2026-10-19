@@ -3,6 +3,13 @@
 Keeps your Obsidian vaults in sync between computers, phones and a NAS, using a private GitHub repo
 instead of Obsidian Sync. Your notes stay plain Markdown files in a normal folder.
 
+> [!WARNING]
+> **Use at your own risk.** This is a personal project, shared as is, without any warranty. Read
+> the code and scripts yourself and make sure you understand what they do before you run them:
+> they install software, change git settings, register background tasks and commit and push your
+> notes. Make a backup of your vaults first. I accept no responsibility for any data loss, damage
+> or other results on your systems. See [LICENSE](LICENSE) (MIT).
+
 ## How it fits together
 
 Every vault is one private GitHub repo. Every device keeps its own copy of that repo (a git
@@ -21,8 +28,8 @@ Every vault is one private GitHub repo. Every device keeps its own copy of that 
 │ vaultsync      │         │ vaultsync        │        │ Obsidian Git    │
 │ (background)   │         │ container        │        │ plugin          │
 │ local clone    │         │ → NAS folders    │        │ local clone     │
-└────────────────┘         │   (NFS), also    │        └─────────────────┘
-                           │   used by Hermes │
+└────────────────┘         │   (NFS), maybe   │        └─────────────────┘
+                           │   used by apps   │
                            └──────────────────┘
 ```
 
@@ -46,9 +53,9 @@ The full history of every note is in git: `git log -p -- "path/to/note.md"`.
   vaultsync instances, not vaultsync plus iCloud/Obsidian Sync, and not desktop Obsidian opening
   the NAS share directly. They overwrite each other's work.
 - **Each device has its own copy.** Desktops and phones work on a local clone. Only the NAS copy
-  lives on the NAS, and only the Docker container (and Hermes) touch it.
-- **Don't let other tools run git in a vault.** Hermes may read and write notes, but only vaultsync
-  runs git there.
+  lives on the NAS, and only the Docker container (and apps on that server) touch it.
+- **Don't let other tools run git in a vault.** Other apps (for example an AI agent) may read and
+  write notes, but only vaultsync runs git there.
 
 ## Setup overview
 
@@ -64,8 +71,8 @@ has finished syncing.
 
 ### 1. Create a GitHub token
 
-1. On GitHub, create one **empty private** repo per vault, for example `you/vault-werk`,
-   `you/vault-prive`. Don't add a README or license; the repo must be empty. (Repo already has
+1. On GitHub, create one **empty private** repo per vault, for example `you/vault-work`,
+   `you/vault-personal`. Don't add a README or license; the repo must be empty. (Repo already has
    notes and history? See [Repo already has history](#repo-already-has-history).)
 2. Create a [fine-grained token](https://github.com/settings/personal-access-tokens):
    - *Repository access:* only the vault repos.
@@ -74,8 +81,8 @@ has finished syncing.
 
 ### 2. NAS: run the Docker container
 
-One container syncs all vaults. It mounts the same NAS folders that Hermes uses. Hermes just reads
-and writes notes; the container commits and pushes them.
+One container syncs all vaults. It mounts the NAS folders, which other apps on the server may also
+use. Those apps just read and write notes; the container commits and pushes them.
 
 **a. Configure.** On the Docker server, in this folder:
 
@@ -88,7 +95,7 @@ Edit `compose.yml`. The comments in it explain each line. You need to set:
 - `volumes`: one line per vault, `<folder on the docker server>:/vaults/<Name>`.
 - `VAULT_PATH`: the same `/vaults/<Name>` paths, separated by `:`.
 - `user`: who owns the vault files on the NAS. Find it with `ls -ln /mnt/nas/obsidian` on the
-  Docker server: the two numbers after the permissions are the uid and gid (for example `1026 100`).
+  Docker server: the two numbers after the permissions are the uid and gid (for example `1000 1000`).
 
 Put the token in a file called `.env` next to `compose.yml` (Docker Compose reads it automatically):
 
@@ -99,15 +106,15 @@ GITHUB_TOKEN=github_pat_...
 Then `chmod 600 .env`. If Docker Compose runs as a different user than the file's owner, use
 `640` with a group that user is in; with `600` Compose can't read it.
 
-**b. First sync.** Stop Hermes first, so nothing changes during the first upload. Make a backup of
-each vault folder first, for example `tar -cf vault-werk-backup.tar -C /mnt/nas/obsidian Werk`.
+**b. First sync.** Stop any other apps that write to the vaults first, so nothing changes during the first upload. Make a backup of
+each vault folder first, for example `tar -cf vault-work-backup.tar -C /mnt/nas/obsidian Work`.
 
 ```sh
 docker compose build                       # build the image
 docker compose run --rm vaultsync init     # turn every vault folder into a git repo
 
 # connect each vault to its GitHub repo (repeat per vault):
-docker compose run --rm --entrypoint git vaultsync -C /vaults/Werk remote add origin https://github.com/you/vault-werk.git
+docker compose run --rm --entrypoint git vaultsync -C /vaults/Work remote add origin https://github.com/you/vault-work.git
 
 docker compose run --rm vaultsync sync     # first upload of all vaults
 ```
@@ -120,7 +127,7 @@ Check GitHub: each repo should now contain your notes.
 docker compose up -d                       # runs in the background, restarts automatically
 ```
 
-Start Hermes again. To check that everything works:
+Start those apps again. To check that everything works:
 
 ```sh
 docker compose logs -f vaultsync           # live log, each line starts with [VaultName]
@@ -129,15 +136,15 @@ docker compose exec vaultsync node /app/bin/vaultsync.js status
 
 Good to know:
 
-- vaultsync notices Hermes' changes within seconds, because Hermes runs on the same Docker server.
+- vaultsync notices changes from apps on the same Docker server within seconds.
   Changes made from elsewhere (for example directly on the NAS) are picked up by the 5-minute round.
 - **Adding a vault later:** add it to `volumes` and `VAULT_PATH`. Run `init`, `remote add` and
   `sync` for only the new vault by overriding `VAULT_PATH`, so the running vaults aren't touched:
 
   ```sh
-  docker compose run --rm -e VAULT_PATH=/vaults/Nieuw vaultsync init
-  docker compose run --rm --entrypoint git vaultsync -C /vaults/Nieuw remote add origin https://github.com/you/vault-nieuw.git
-  docker compose run --rm -e VAULT_PATH=/vaults/Nieuw vaultsync sync
+  docker compose run --rm -e VAULT_PATH=/vaults/New vaultsync init
+  docker compose run --rm --entrypoint git vaultsync -C /vaults/New remote add origin https://github.com/you/vault-new.git
+  docker compose run --rm -e VAULT_PATH=/vaults/New vaultsync sync
   docker compose up -d                       # recreate the container with both vaults
   ```
 
@@ -150,8 +157,8 @@ run `sync` straight away: the two histories have nothing in common. Instead, aft
 `remote add`, put the NAS folder on top of the GitHub history *without* touching the files:
 
 ```sh
-docker compose run --rm --entrypoint git vaultsync -C /vaults/Werk fetch origin
-docker compose run --rm --entrypoint git vaultsync -C /vaults/Werk reset origin/main   # files stay as they are
+docker compose run --rm --entrypoint git vaultsync -C /vaults/Work fetch origin
+docker compose run --rm --entrypoint git vaultsync -C /vaults/Work reset origin/main   # files stay as they are
 docker compose run --rm vaultsync sync
 ```
 
@@ -162,6 +169,8 @@ any commits of its own, so right after `init`.
 ### 3. Desktop: switch to a local clone
 
 Stop opening the NAS folder in Obsidian. Instead, each desktop gets its own copy.
+
+On Windows 11 you can skip steps a–c and e: see [Windows: setup script](#windows-setup-script).
 
 **a. Install vaultsync** (once per computer). Requires [Node.js](https://nodejs.org) 20.12 or newer
 and git.
@@ -183,7 +192,7 @@ git config --global user.email "you@example.com"
 [macOS notes](#macos)).
 
 ```sh
-git clone -c core.autocrlf=false https://github.com/you/vault-werk.git ~/Vaults/Werk
+git clone -c core.autocrlf=false https://github.com/you/vault-work.git ~/Vaults/Work
 ```
 
 `-c core.autocrlf=false` stops Windows from changing line endings. Without it every note looks
@@ -192,7 +201,7 @@ git clone -c core.autocrlf=false https://github.com/you/vault-werk.git ~/Vaults/
 **c. Configure.** Edit `.env` in this folder:
 
 ```sh
-VAULT_PATH=/Users/you/Vaults/Werk:/Users/you/Vaults/Prive
+VAULT_PATH=/Users/you/Vaults/Work:/Users/you/Vaults/Personal
 GITHUB_TOKEN=github_pat_...
 ```
 
@@ -209,11 +218,51 @@ node bin/vaultsync.js status   # should show ahead 0, behind 0, conflicts none
 
 `last push: never` right after cloning is normal: there was nothing new to upload yet.
 
-**d. Open in Obsidian:** **Open folder as vault** → `~/Vaults/Werk`, and so on.
+**d. Open in Obsidian:** **Open folder as vault** → `~/Vaults/Work`, and so on.
 
 **e. Run vaultsync in the background.** See [Run at login](#run-at-login).
 
 Have notes that exist only on this desktop? Copy them into the clone. vaultsync uploads them.
+
+#### Windows: setup script
+
+`setup-obsidian-vaultsync-windows.ps1` does steps a–c and e in one go on Windows 11:
+
+- installs or updates Git, Node.js LTS and Obsidian with `winget` (already installed some other
+  way? winget then usually reports it as installed and skips it; if not, it may install a second
+  copy, so check the script first);
+- clones vaultsync to `%LOCALAPPDATA%\vaultsync` and runs `npm ci`;
+- clones each vault to `%USERPROFILE%\Vaults\<repo name>` with `core.autocrlf=false`, and sets
+  the commit author per vault;
+- writes `.env` (no token: it uses Git Credential Manager, which opens a GitHub sign-in the first
+  time), then runs `init`, `sync` and `status`;
+- registers a hidden scheduled task `vaultsync` that runs `watch` at login and restarts it if it
+  crashes.
+
+**Read the script before you run it.** It installs software, changes git settings and registers
+a scheduled task on your machine, and is used at your own risk (see the warning at the top).
+
+Run it in a normal (not admin) PowerShell window, from a clone of this repo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup-obsidian-vaultsync-windows.ps1 `
+  -VaultRepos 'https://github.com/you/vault-work.git','https://github.com/you/vault-personal.git' `
+  -GitName 'Your Name' -GitEmail 'you@example.com'
+```
+
+| Parameter     | Meaning                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------- |
+| `-VaultRepos` | Required. GitHub URLs of the vault repos. The folder name is the repo name.             |
+| `-GitName`, `-GitEmail` | Commit author in the vaults. Default: your global `git config user.name/email`. |
+| `-ToolRepo`   | Where to clone vaultsync from. Default: the `origin` of the clone the script is in.     |
+| `-VaultRoot`  | Default `%USERPROFILE%\Vaults`.                                                          |
+| `-ToolDir`    | Default `%LOCALAPPDATA%\vaultsync`.                                                      |
+| `-TaskName`   | Default `vaultsync`.                                                                     |
+
+The script is safe to run again: it updates vaultsync, keeps existing vault clones (it stops if a
+clone points to a different repo, or if a target folder exists and isn't a clone), and replaces
+the task. The task logs to `%LOCALAPPDATA%\vaultsync\vaultsync-task.log`. Afterwards, open each
+folder in Obsidian with **Open folder as vault** (step d).
 
 ### 4. Phone: Obsidian Git plugin
 
@@ -223,7 +272,7 @@ The phone gets its own copy too, and only talks to GitHub.
 2. **Settings → Community plugins**: install and enable **Git**.
 3. In the Git plugin settings, under authentication: your GitHub username, and the token as the
    password. Set the author name to something like `phone`.
-4. Run the command **Clone an existing remote repo** with `https://github.com/you/vault-werk.git`.
+4. Run the command **Clone an existing remote repo** with `https://github.com/you/vault-work.git`.
    Clone into the vault root, then restart Obsidian.
 5. Plugin settings: **Pull on startup** on, **Auto commit-and-sync interval** 5,
    **Auto pull interval** 5.
@@ -257,7 +306,7 @@ In Docker: `docker compose run --rm vaultsync <command>`.
 Sample `status` output:
 
 ```
-vault        /Users/you/Vaults/Werk
+vault        /Users/you/Vaults/Work
 branch       main  (ahead 0, behind 0 as of last fetch)
 uncommitted  0 file(s)
 last pull    13-10-2026, 14:04:26 (3m ago)
@@ -408,7 +457,8 @@ Both files must exist. If it still fails, launchd's log shows the real reason:
 
 ### Windows
 
-In PowerShell (runs hidden at login, restarts if it crashes):
+The [setup script](#windows-setup-script) registers this task for you. To do it by hand, in
+PowerShell (runs hidden at login, restarts if it crashes):
 
 ```powershell
 $node = (Get-Command node).Source
