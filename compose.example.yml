@@ -25,6 +25,7 @@ services:
     environment:
       # CHANGE: the vault folders *inside* the container (right-hand side of `volumes` below),
       # separated by ":".
+      VAULT_PATH: /vaults/Work:/vaults/Personal
 
       # Taken from the .env file next to compose.yml. Needs "Contents: Read and write" on all
       # vault repos.
